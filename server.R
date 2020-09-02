@@ -474,9 +474,20 @@ server <- function(input, output, session){
         xlab('Cell line') +
         ylab('Foldchange in stability and expression
          compared to denominator in T1 +/- SD [log2(Fc)]')
+      
+      legend = data.frame('a' = 'ns  > 0.05    ',
+                    'b' = '*  < 0.0    ',
+                    'c' = '**  < 0.005    ',
+                    'd' = '***  < 0.0005  ')
+
+      gg2 <- tableGrob(legend, cols = NULL, rows = NULL, theme = ttheme_minimal())
+      
+      gg <- arrangeGrob(gg1, gg2, heights=c(15, 1))
+      gg <- ggdraw(gg) + 
+        theme(plot.background = element_rect(fill="white", color = NA))
     }
 
-    return(gg1)
+    return(gg)
   })
   
   output$bar.plot <- renderPlot({
