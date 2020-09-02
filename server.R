@@ -567,7 +567,7 @@ server <- function(input, output, session){
     g <- arrangeGrob(g1, g2, heights=c(15, 1))
     
     filename = function(){'barplot_plot.pdf'},
-    content = function(file){ggsave(file, g, device = 'pdf')
+    content = function(file){ggsave(file, plot(g(, device = 'pdf')
     }
   )
   
