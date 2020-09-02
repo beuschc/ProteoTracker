@@ -557,8 +557,7 @@ server <- function(input, output, session){
   
    output$out.download.bar.plot <- downloadHandler(
     filename = function(){'barplot_plot.pdf'},
-    content = function(file){ggsave(file, bar.plot(), device = 'pdf')
-    }
+    content = function(file){ggsave(file, bar.plot(), device = 'pdf')}
   )
   
   #link to paper
