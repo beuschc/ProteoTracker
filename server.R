@@ -481,17 +481,7 @@ server <- function(input, output, session){
   
   output$bar.plot <- renderPlot({
     req(bar.plot())
-
-    legend = data.frame('a' = 'ns  > 0.05    ',
-                    'b' = '*  < 0.0    ',
-                    'c' = '**  < 0.005    ',
-                    'd' = '***  < 0.0005  ')
-
-    g2 <- tableGrob(legend, cols = NULL, rows = NULL)
-
-    g <- arrangeGrob(bar.plot(), g2, heights=c(15, 1))
-
-    return(plot(g))
+    bar.plot()
   })
   
   ## DOWNLOADS
