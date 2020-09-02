@@ -489,7 +489,7 @@ server <- function(input, output, session){
 
     g2 <- tableGrob(legend, cols = NULL, rows = NULL)
 
-    g <- arrangeGrob(bar.plot(), g2, heights=c(15, 1), theme = tt2)
+    g <- arrangeGrob(bar.plot(), g2, heights=c(15, 1))
 
     return(plot(g))
   })
