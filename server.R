@@ -555,19 +555,9 @@ server <- function(input, output, session){
     downloadButton('out.download.bar.plot', 'Download barplot plot')
   })
   
-  output$out.download.bar.plot <- downloadHandler(
-    req(bar.plot())
-    g1 <- bar.plot()
-    legend = data.frame('a' = 'ns  > 0.05    ',
-                    'b' = '*  < 0.0    ',
-                    'c' = '**  < 0.005    ',
-                    'd' = '***  < 0.0005  ')
-
-    g2 <- tableGrob(legend, cols = NULL, rows = NULL)
-    g <- arrangeGrob(g1, g2, heights=c(15, 1))
-    
+   output$out.download.bar.plot <- downloadHandler(
     filename = function(){'barplot_plot.pdf'},
-    content = function(file){ggsave(file, plot(g), device = 'pdf')
+    content = function(file){ggsave(file, bar.plot(), device = 'pdf')
     }
   )
   
