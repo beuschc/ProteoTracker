@@ -3,12 +3,12 @@ server <- function(input, output, session){
   cell.lines <- c('' ,'hFF', 'RKO', 'iPSC', 'EB', 'ESC')
   
   comparison.df <- reactive({
-    df <- read_tsv('E:/MS_data/2020/200306_DDA_DIA_Pierre/DDA/combined/txt/shiny/data/finding_significant_proteins_fisher.tsv')
+    df <- read_tsv('data/finding_significant_proteins_fisher.tsv')
     return(df)
   })
   
   all.data.df <- reactive({
-    df <- read_tsv('E:/MS_data/2020/200306_DDA_DIA_Pierre/DDA/combined/txt/shiny/data/all_data.tsv')
+    df <- read_tsv('data/all_data.tsv')
     return(df)
   })
   
