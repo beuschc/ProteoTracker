@@ -1,3 +1,16 @@
+library(shiny)
+library(shinydashboard)
+library(tidyverse)
+library(ggalluvial)
+library(ggrepel)
+library(shinycssloaders)
+library(DT)
+library(Cairo)
+library(broom)
+library(gridExtra)
+library(cowplot)
+options(shiny.usecairo = T)
+
 cell.lines <- c('' ,'hFF', 'RKO', 'iPSC', 'EB', 'ESC')
 
 ui <- dashboardPage(
