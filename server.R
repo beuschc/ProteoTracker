@@ -1,3 +1,16 @@
+library(shiny)
+library(shinydashboard)
+library(tidyverse)
+library(ggalluvial)
+library(ggrepel)
+library(shinycssloaders)
+library(DT)
+library(Cairo)
+library(broom)
+library(gridExtra)
+library(cowplot)
+options(shiny.usecairo = T)
+
 server <- function(input, output, session){
 
   cell.lines <- c('' ,'hFF', 'RKO', 'iPSC', 'EB', 'ESC')
