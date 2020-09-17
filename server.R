@@ -267,7 +267,7 @@ server <- function(input, output, session){
       spread(trajectory, sector) %>%
       mutate('transition' = paste0(T1, '_to_', T2))
 
-    return(DT::datatable(dat, extensions = 'Buttons',server = F,
+    return(DT::datatable(dat, extensions = 'Buttons',
                          options = list(dom = 'Bfrtip', scrollX = T, buttons = c('csv', 'excel'), fontSize = '100%'),
                          class = "display"))
   })
