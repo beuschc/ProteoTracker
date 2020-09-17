@@ -261,15 +261,20 @@ server <- function(input, output, session){
     return(dat)
   })
   
-  output$protein.trajectory <- DT::renderDataTable(server = F,{
+  ooutput$protein.trajectory <- DT::renderDataTable(server = F,{
     dat <- sankey.protein.df() %>%
       select(ID:Peptides, trajectory, sector) %>%
       spread(trajectory, sector) %>%
       mutate('transition' = paste0(T1, '_to_', T2))
 
-    return(DT::datatable(dat, extensions = 'Buttons',
-                         options = list(dom = 'Bfrtip', scrollX = T, buttons = c('csv', 'excel'), fontSize = '100%'),
-                         class = "display"))
+    protein.trajectory <- DT::datatable(data = dat, extensions = 'Buttons',
+                         options = list(dom = 'Bfrtip', scrollX = T,
+                         buttons = list(list(extend = 'csv', filename = 'protein trajectory'), 
+                          list(extend = 'excel', filename = 'protein trajectory')),
+                         fontSize = '100%'),
+                         class = "display")
+
+    return(protein.trajectory)
   })
   
   sankey.df <- eventReactive(c(input$start.analysis,input$in.filterGenes, input$fisher.cutoff),{
