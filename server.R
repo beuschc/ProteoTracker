@@ -261,7 +261,7 @@ server <- function(input, output, session){
     return(dat)
   })
   
-  output$protein.trajectory <- DT::renderDataTable({
+  output$protein.trajectory <- DT::renderDataTable(server = F,{
     dat <- sankey.protein.df() %>%
       select(ID:Peptides, trajectory, sector) %>%
       spread(trajectory, sector) %>%
