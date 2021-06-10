@@ -9,32 +9,140 @@ library(Cairo)
 library(broom)
 library(gridExtra)
 library(cowplot)
+library(metap)
+library(svglite)
+
 options(shiny.usecairo = T)
+options(dplyr.summarise.inform = F)
+
+calculate.pval.and.fisher <- function(dat = NULL){
+  cell.lines = unique(dat$cell)
+  res <- list()
+  n = 1
+  for(i in 1:length(cell.lines)){
+    for(j in 1:length(cell.lines)){
+      if (j == i){next}
+      denominator = c(cell.lines[i])
+      numerator = c(cell.lines[j])
+      name = paste0(numerator, '_vs_', denominator)
+      
+      test.Exp <- dat %>%
+        filter(experiment == 'Exp') %>%
+        filter(cell == denominator | cell == numerator) %>%
+        mutate('category' = ifelse(cell == denominator, 'denominator', 'numerator')) %>%
+        group_by(`ID`, `Gene names`, Peptides) %>%
+        do({
+          s <- .
+          p <- try(t.test(value ~ category, data = s, var.equal = T), silent = T)
+          tidy(p)
+        }) %>%
+        mutate('trajectory.change.Exp' = estimate2 - estimate1) %>%
+        dplyr::select(ID:Peptides, trajectory.change.Exp, p.value) %>%
+        rename('p.value.trajectory.change.Exp' = 'p.value')
+      
+      test.Sm <- dat %>%
+        filter(experiment == 'Sm') %>%
+        filter(cell == denominator | cell == numerator) %>%
+        mutate('category' = ifelse(cell == denominator, 'denominator', 'numerator')) %>%
+        group_by(`ID`, `Gene names`, Peptides) %>%
+        do({
+          s <- .
+          p <- try(t.test(value ~ category, data = s, var.equal = T), silent = T)
+          tidy(p)
+        }) %>%
+        mutate('trajectory.change.Sm' = estimate2 - estimate1) %>%
+        dplyr::select(ID:Peptides, trajectory.change.Sm, p.value) %>%
+        rename('p.value.trajectory.change.Sm' = 'p.value')
+      
+      res[[n]] <- test.Exp %>%
+        full_join(test.Sm, by = c('ID', 'Gene names', 'Peptides')) %>%
+        mutate('comparison' = name)
+      n = n+1
+    }
+  }
+  dat <- plyr::rbind.fill(res)
+  
+  res <- rep(NA, nrow(dat))
+  for(i in 1:nrow(dat)){
+    res[i] <-  metap::sumlog(c(dat$p.value.trajectory.change.Exp[i], dat$p.value.trajectory.change.Sm[i]))$p
+  }
+  dat$fisher.score = res
+  
+  return(dat)
+}
+
 
 server <- function(input, output, session){
+  
+  #extending max file size
+  options(shiny.maxRequestSize = 50*1024^2)
 
-  cell.lines <- c('' ,'hFF', 'RKO', 'iPSC', 'EB', 'ESC')
-  
-  comparison.df <- reactive({
-    df <- read_tsv('data/finding_significant_proteins_fisher.tsv')
-    return(df)
+  #file location for ProteTracker data
+  data.set <- eventReactive(c(input$checkGroup, input$upload.file),{
+    if(!is.null(input$checkGroup)){
+      if(input$checkGroup == 1){
+        ds <- 'data/ProteoTracker_data.tsv'
+      }
+      if(input$checkGroup == 2){
+        req(input$upload.file)
+        inFile <- input$upload.file
+        if(!is.null(inFile)){
+          ds <- inFile$datapath
+        }
+      } 
+    }
+    
+    return(ds)
   })
   
-  all.data.df <- reactive({
-    df <- read_tsv('data/all_data.tsv')
+  #read data into shiny
+  dat <- reactive({
+    ds <- data.set()
+    if(is.character(ds)){
+      df <- suppressMessages(read_tsv(ds)) %>%
+          gather(key, value, -(ID:Peptides)) %>%
+          separate(key, sep = '_', into = c('experiment', 'cell', 'replica'))
+    }
+    else{
+      df <- NULL
+    }
+    
     return(df)
   })
+
+  #determine denominator and numerator
+  cell.states <- reactive({
+    o <- NULL
+    if(!is.null(dat())){
+      d <- dat()
+      o <- append('', unique(d$cell))
+    }
+    else{
+      o <- NULL
+    }
   
+    return(o)
+  })
+  
+  #determine all genes in
   output$filterGenes <- renderUI({
-    dat <- comparison.df()
+    dat <- dat()
     dat.choices = unique(dat$`Gene names`)
-   
+    
     selectizeInput('in.filterGenes', 'Please select here the genes you want to highlight in your analysis',
                    choices = dat.choices, selected = NULL, multiple = T, options = NULL)
   })
   
+  #add start button
+  output$action <- renderUI({
+    req(dat())
+    
+    actionButton('start.analysis', 'Start Analysis')
+  })
+  
   #in.t1.denominator
   observe({
+    cell.lines <- cell.states()
     x <- input$in.t1.denominator
     x.exclude1 <- input$in.t1.numerator
     x.exclude2 <- input$in.t2.numerator
@@ -49,6 +157,7 @@ server <- function(input, output, session){
   
   #in.t1.numerator
   observe({
+    cell.lines <- cell.states()
     x <- input$in.t1.numerator
     x.exclude1 <- input$in.t1.denominator
     x.exclude2 <- input$in.t2.numerator
@@ -63,6 +172,7 @@ server <- function(input, output, session){
   
   #in.t2.denominator
   observe({
+    cell.lines <- cell.states()
     x <- input$in.t2.denominator
     x.exclude1 <- input$in.t1.denominator
     x.exclude2 <- input$in.t2.numerator
@@ -77,6 +187,7 @@ server <- function(input, output, session){
   
   #in.t2.numerator
   observe({
+    cell.lines <- cell.states()
     x <- input$in.t2.numerator
     x.exclude1 <- input$in.t1.denominator
     x.exclude2 <- input$in.t1.numerator
@@ -91,6 +202,7 @@ server <- function(input, output, session){
   
   #in.t3.denominator
   observe({
+    cell.lines <- cell.states()
     x <- input$in.t3.denominator
     x.exclude1 <- input$in.t1.numerator
     x.exclude2 <- input$in.t2.numerator
@@ -105,6 +217,7 @@ server <- function(input, output, session){
   
   #in.t3.dnumerator
   observe({
+    cell.lines <- cell.states()
     x <- input$in.t3.numerator
     x.exclude1 <- input$in.t1.denominator
     x.exclude2 <- input$in.t1.numerator
@@ -117,47 +230,52 @@ server <- function(input, output, session){
     )
   })
   
-  dummy.plot.df <- eventReactive(input$start.analysis, {
-    req(input$in.t1.denominator)
-    req(input$in.t1.numerator)
-    req(input$in.t2.denominator)
-    req(input$in.t2.numerator)
-    req(input$in.t3.denominator)
-    req(input$in.t3.numerator)
-    
-    il <- data.frame('x' = c(0, 2, 4, 0),
-                     'y' = c(0, 2, 1, 0),
-                     'denominator' = c('', '', '', ''),
-                     'numerator' = c('', '', '', ''))
-    
-    il$denominator[1] <- input$in.t1.denominator
-    il$numerator[1] <- input$in.t1.numerator
-    
-    il$denominator[2] <- input$in.t2.denominator
-    il$numerator[2] <- input$in.t2.numerator
-    
-    il$denominator[3] <- input$in.t3.denominator
-    il$numerator[3] <- input$in.t3.numerator
-    
-    il$denominator[4] <- input$in.t1.denominator
-    il$numerator[4] <- input$in.t1.numerator
-    
-    return(il)
+  #popup message
+  observeEvent(input$start.analysis,{
+    if(input$checkGroup == 2){
+      showModal(modalDialog(
+        title = '',
+        'Your data is getting processed. Please have patience! \n
+        Depending on the size of your input data this could take up to a few minutes',
+        easyClose = T
+      ))
+    }
   })
   
+  #calculate pvale and fisher score of all possible combinations
+  calculate.dat <- reactive({
+    if(!is.null(dat())){
+      dat <- dat()
+      if(input$checkGroup == 1){
+        dat <- suppressMessages(read_tsv('data/ProteoTracker_data_processed.tsv'))
+      }
+      if(input$checkGroup == 2){
+        dat <- calculate.pval.and.fisher(dat = dat)
+      }
+    }
+    else{
+      dat <- NULL
+    }
     
-  scatter.df <- eventReactive(c(input$start.analysis,input$in.filterGenes, input$fisher.cutoff), {
+    return(dat)    
+  })
+  
+  #make fisher score cutoff criteria
+  scatter.df <- eventReactive(c(input$start.analysis, input$in.filterGenes, input$fisher.cutoff,
+                                input$in.t1.denominator, input$in.t1.numerator, input$in.t2.denominator,
+                                input$in.t2.numerator, input$in.t3.denominator, input$in.t3.numerator), {
     req(input$in.t1.denominator)
     req(input$in.t1.numerator)
     req(input$in.t2.denominator)
     req(input$in.t2.numerator)
     req(input$in.t3.denominator)
     req(input$in.t3.numerator)
-  
-    dat <- comparison.df()
+    req(input$start.analysis)
+    
+    dat <- calculate.dat()
     
     dat <- dat %>%
-      mutate('trajectory.significance' = ifelse(fisher < input$fisher.cutoff, 'passed fisher significance', 'failed fisher significance'))
+      mutate('trajectory.significance' = ifelse(fisher.score < input$fisher.cutoff, 'passed fisher significance', 'failed fisher significance'))
     
     comparisons = c(paste0(input$in.t1.numerator, '_vs_', input$in.t1.denominator), 
                     paste0(input$in.t2.numerator, '_vs_', input$in.t2.denominator),
@@ -170,7 +288,7 @@ server <- function(input, output, session){
         mutate('trajectory' = paste0('T', i))
     }
     dat <- plyr::rbind.fill(res)
-
+    
     dat$poi <- 'bg'
     if(length(input$in.filterGenes) > 0){
       x  <- input$in.filterGenes
@@ -183,6 +301,7 @@ server <- function(input, output, session){
     return(dat)
   })
   
+  #prepare data for scatter plot
   scatter.plot <- reactive({
     dat <- scatter.df()
     
@@ -194,10 +313,10 @@ server <- function(input, output, session){
       mutate('highlight' = ifelse(poi == 'poi', 'selected protein', trajectory.significance)) %>%
       mutate('transparency' = ifelse(poi == 'poi', 1, 1))
     
-    max.x = max(dat$trajectory.change.stability)
-    max.y = max(dat$trajectory.change.expression)
+    max.x = max(dat$trajectory.change.Sm)
+    max.y = max(dat$trajectory.change.Exp)
     
-    gg <- ggplot(dat, aes(y = trajectory.change.expression, x = trajectory.change.stability, colour = highlight)) +
+    gg <- ggplot(dat, aes(y = trajectory.change.Exp, x = trajectory.change.Sm, colour = highlight)) +
       geom_point(aes(alpha = transparency), shape = 16) +
       geom_hline(yintercept = 0, linetype = 'dashed', alpha = 0.5) +
       geom_vline(xintercept = 0, linetype = 'dashed', alpha = 0.5) +
@@ -219,22 +338,25 @@ server <- function(input, output, session){
     return(gg)
   })
   
+  #print data for scatter plot
   output$scatter.plot <- renderPlot({
     req(scatter.plot())
     scatter.plot()
   })
   
-  sankey.protein.df <- eventReactive(c(input$start.analysis,input$in.filterGenes, input$fisher.cutoff), {
+  #prepare data for sankey plot
+  sankey.protein.df <- eventReactive(c(input$start.analysis, input$in.filterGenes, input$fisher.cutoff,
+                                       input$in.t1.denominator, input$in.t1.numerator, input$in.t2.denominator,
+                                       input$in.t2.numerator, input$in.t3.denominator, input$in.t3.numerator), {
     dat <- scatter.df()
-    
     if(length(input$in.filterGenes) == 0){
       dat <- dat %>%
         filter(trajectory != 't3') %>%
         mutate('sector' = NA) %>%
-        mutate('sector' = ifelse(trajectory.change.stability > 0 & trajectory.change.expression > 0, 'A', sector)) %>%
-        mutate('sector' = ifelse(trajectory.change.stability > 0 & trajectory.change.expression < 0, 'B', sector)) %>%
-        mutate('sector' = ifelse(trajectory.change.stability < 0 & trajectory.change.expression < 0, 'C', sector)) %>%
-        mutate('sector' = ifelse(trajectory.change.stability < 0 & trajectory.change.expression > 0, 'D', sector)) %>%
+        mutate('sector' = ifelse(trajectory.change.Sm > 0 & trajectory.change.Exp > 0, 'A', sector)) %>%
+        mutate('sector' = ifelse(trajectory.change.Sm > 0 & trajectory.change.Exp < 0, 'B', sector)) %>%
+        mutate('sector' = ifelse(trajectory.change.Sm < 0 & trajectory.change.Exp < 0, 'C', sector)) %>%
+        mutate('sector' = ifelse(trajectory.change.Sm < 0 & trajectory.change.Exp > 0, 'D', sector)) %>%
         mutate('sector' = ifelse(trajectory.significance == 'failed fisher significance', 'E', sector))
       
     }
@@ -243,10 +365,10 @@ server <- function(input, output, session){
       dat <- dat %>%
         filter(trajectory != 't3') %>%
         mutate('sector' = NA) %>%
-        mutate('sector' = ifelse(trajectory.change.stability > 0 & trajectory.change.expression > 0, 'A', sector)) %>%
-        mutate('sector' = ifelse(trajectory.change.stability > 0 & trajectory.change.expression < 0, 'B', sector)) %>%
-        mutate('sector' = ifelse(trajectory.change.stability < 0 & trajectory.change.expression < 0, 'C', sector)) %>%
-        mutate('sector' = ifelse(trajectory.change.stability < 0 & trajectory.change.expression > 0, 'D', sector)) %>%
+        mutate('sector' = ifelse(trajectory.change.Sm > 0 & trajectory.change.Exp > 0, 'A', sector)) %>%
+        mutate('sector' = ifelse(trajectory.change.Sm > 0 & trajectory.change.Exp < 0, 'B', sector)) %>%
+        mutate('sector' = ifelse(trajectory.change.Sm < 0 & trajectory.change.Exp < 0, 'C', sector)) %>%
+        mutate('sector' = ifelse(trajectory.change.Sm < 0 & trajectory.change.Exp > 0, 'D', sector)) %>%
         mutate('sector' = ifelse(trajectory.significance == 'failed fisher significance', 'E', sector))
       
       dat$poi <- 0
@@ -261,23 +383,29 @@ server <- function(input, output, session){
     return(dat)
   })
   
-  output$protein.trajectory <- DT::renderDataTable(server = F,{
+  output$protein.trajectory <- DT::renderDataTable(server = T,{
     dat <- sankey.protein.df() %>%
-      select(ID:Peptides, trajectory, sector) %>%
+      dplyr::select(ID:Peptides, trajectory, sector) %>%
       spread(trajectory, sector) %>%
       mutate('transition' = paste0(T1, '_to_', T2))
-
-    protein.trajectory <- DT::datatable(data = dat, extensions = 'Buttons',
-                         options = list(dom = 'Bfrtip', scrollX = T,
-                         buttons = list(list(extend = 'csv', filename = 'protein trajectory'), 
-                          list(extend = 'excel', filename = 'protein trajectory')),
-                         fontSize = '100%'),
-                         class = "display")
-
+    
+    protein.trajectory <- DT::datatable(data = dat,
+                                        extensions = 'Buttons',
+                                        options = list(dom = 'Bfrtip',
+                                                       scrollX = T,
+                                                       pageLength = 50,
+                                                       buttons = list(list(extend = 'csv', filename = 'protein_trajectory'), 
+                                                                      list(extend = 'excel', filename = 'protein_trajectory')),
+                                                       fontSize = '100%'),
+                                        class = "display")
+    
     return(protein.trajectory)
   })
   
-  sankey.df <- eventReactive(c(input$start.analysis,input$in.filterGenes, input$fisher.cutoff),{
+  
+  sankey.df <- eventReactive(c(input$start.analysis,input$in.filterGenes, input$fisher.cutoff,
+                               input$in.t1.denominator, input$in.t1.numerator, input$in.t2.denominator,
+                               input$in.t2.numerator, input$in.t3.denominator, input$in.t3.numerator),{
     dat <- sankey.protein.df()
     
     if(length(input$in.filterGenes) == 0){
@@ -287,12 +415,12 @@ server <- function(input, output, session){
         unite('transistion', c(T1, T2), remove = F)
       
       s1 <- s %>%
-        select(-c(T2, T2)) %>%
+        dplyr::select(-c(T2, T3)) %>%
         mutate('T' = 'T1')  %>%
         rename('sector' = 'T1')
       
       s2 <- s %>%
-        select(-c(T1, T1)) %>%
+        dplyr::select(-c(T1, T3)) %>%
         mutate('T' = 'T2') %>%
         rename('sector' = 'T2')
       
@@ -314,12 +442,12 @@ server <- function(input, output, session){
         mutate('transistion' = ifelse(poi == 1, paste(T1, T2, `Gene names`, sep = '_'), paste(T1, T2, 'NULL', sep = '_')))
       
       s1 <- s %>%
-        select(-c(T2, T2)) %>%
+        dplyr::select(-c(T2, T3)) %>%
         mutate('T' = 'T1')  %>%
         rename('sector' = 'T1')
       
       s2 <- s %>%
-        select(-c(T1, T1)) %>%
+        dplyr::select(-c(T1, T3)) %>%
         mutate('T' = 'T2') %>%
         rename('sector' = 'T2')
       
@@ -344,7 +472,7 @@ server <- function(input, output, session){
   
   sankey.plot <- reactive({
     dat <- sankey.df()
-
+    
     if(ncol(dat) == 4){
       gg <- ggplot(dat,
                    aes(x = T, stratum = sector, alluvium = transistion,
@@ -395,8 +523,8 @@ server <- function(input, output, session){
     
     dat <- sankey.df() %>%
       ungroup() %>%
-      filter(T == 'T1') %>%
-      select(-T)
+      filter('T' == 'T1') %>%
+      dplyr::select(-`T`)
     
     s <- dat %>%
       group_by(sector) %>%
@@ -412,8 +540,8 @@ server <- function(input, output, session){
   
   bar.df <- eventReactive(input$in.filterGenes, {
     req(input$in.filterGenes)
-    dat <- all.data.df()
-  
+    dat <- dat()
+
     dat$poi <- 0
     x <- input$in.filterGenes
     for(i in 1:length(x)){
@@ -427,14 +555,14 @@ server <- function(input, output, session){
     dat.ref <- dat %>%
       filter(cell == input$in.t1.denominator) %>%
       group_by(`Gene names`, cell, experiment) %>%
-      summarise(ref.mean.value = mean(norm.value)) %>%
+      summarise(ref.mean.value = mean(value)) %>%
       ungroup() %>%
-      select(-cell)
+      dplyr::select(-cell)
     
     dat <- dat %>%
       full_join(dat.ref, by = c('Gene names', 'experiment')) %>%
-      mutate('t1.denominator.norm.value' = norm.value - ref.mean.value)
-  
+      mutate('t1.denominator.norm.value' = value - ref.mean.value)
+    
     return(dat)
   })
   
@@ -443,7 +571,7 @@ server <- function(input, output, session){
     
     dat.ref <- dat %>%
       filter(cell == input$in.t1.denominator) %>%
-      select(ID, `Gene names`, Peptides, experiment, replica, t1.denominator.norm.value) %>%
+      dplyr::select(ID, `Gene names`, Peptides, experiment, replica, t1.denominator.norm.value) %>%
       rename('test.ref' = 't1.denominator.norm.value')
     
     test <- dat %>%
@@ -453,7 +581,7 @@ server <- function(input, output, session){
         s <- .
         
         ss <- s %>%
-          select(ID, experiment, cell, t1.denominator.norm.value, test.ref) %>%
+          dplyr::select(ID, experiment, cell, t1.denominator.norm.value, test.ref) %>%
           gather(key, value, t1.denominator.norm.value:test.ref)
         
         p <- try(t.test(value ~ key, data = ss, var.equal = T), silent = T)
@@ -467,7 +595,7 @@ server <- function(input, output, session){
     
     t <- test %>%
       ungroup() %>%
-      select(`Gene names`, cell, experiment, asterix) %>%
+      dplyr::select(`Gene names`, cell, experiment, asterix) %>%
       filter(cell != input$in.t1.denominator)
     
     s <- dat %>%
@@ -476,10 +604,10 @@ server <- function(input, output, session){
                 'sd.value' = sd(t1.denominator.norm.value)) %>%
       full_join(t, by = c('Gene names', 'cell', 'experiment')) %>%
       mutate('asterix.y' = ifelse(mean.value > 0, (mean.value+sd.value)+0.2, (mean.value-sd.value)-0.2))
-   
+    
     if(nrow(dat) > 0){
       gg1 <- ggplot(s, 
-                   aes(x = cell, y = mean.value, fill = experiment)) +
+                    aes(x = cell, y = mean.value, fill = experiment)) +
         geom_bar(stat = 'identity', position = 'dodge') +
         geom_col(position = position_dodge(0.9)) +
         geom_errorbar(aes(ymin = mean.value - sd.value, ymax = mean.value + sd.value), width = 0.25, position = position_dodge(0.9)) +
@@ -494,17 +622,17 @@ server <- function(input, output, session){
          compared to denominator in T1 +/- SD [log2(Fc)]')
       
       legend = data.frame('a' = 'ns  > 0.05    ',
-                    'b' = '*  < 0.0    ',
-                    'c' = '**  < 0.005    ',
-                    'd' = '***  < 0.0005  ')
-
+                          'b' = '*  < 0.0    ',
+                          'c' = '**  < 0.005    ',
+                          'd' = '***  < 0.0005  ')
+      
       gg2 <- tableGrob(legend, cols = NULL, rows = NULL, theme = ttheme_minimal())
       
       gg <- arrangeGrob(gg1, gg2, heights=c(15, 1))
       gg <- ggdraw(gg) + 
         theme(plot.background = element_rect(fill="white", color = NA))
     }
-
+    
     return(gg)
   })
   
@@ -521,16 +649,25 @@ server <- function(input, output, session){
   })
   
   output$out.download.scatter.data <- downloadHandler(
-    filename = function() {'scatter_plot_data.csv'},
-    content = function(file){write.csv(scatter.df(), file, row.names = F)}
-  )
+    filename = function() {'scatter_plot_data.tsv'},
+    content = function(file){write.table(scatter.df(), file, row.names = F)
+      })
   
-  output$download.scatter.plot <- renderUI({
+  output$download.scatter.plot.svg <- renderUI({
     req(scatter.df())
-    downloadButton('out.download.scatter.plot', 'Download scatter plot')
+    downloadButton('out.download.scatter.plot.svg', 'Download scatter plot as svg')
+  })
+  output$download.scatter.plot.pdf <- renderUI({
+    req(scatter.df())
+    downloadButton('out.download.scatter.plot.pdf', 'Download scatter plot as pdf')
   })
   
-  output$out.download.scatter.plot <- downloadHandler(
+  output$out.download.scatter.plot.svg <- downloadHandler(
+    filename = function(){'scatter_plot.svg'},
+    content = function(file){ggsave(file, scatter.plot(), device = 'svg')
+    }
+  )
+  output$out.download.scatter.plot.pdf <- downloadHandler(
     filename = function(){'scatter_plot.pdf'},
     content = function(file){ggsave(file, scatter.plot(), device = 'pdf')
     }
@@ -543,16 +680,25 @@ server <- function(input, output, session){
   })
   
   output$out.download.sankey.data <- downloadHandler(
-    filename = function() {'sankey_plot_data.csv'},
-    content = function(file){write.csv(sankey.plot.df(), file, row.names = F)}
+    filename = function() {'sankey_plot_data.tsv'},
+    content = function(file){write.table(sankey.plot.df(), file, row.names = F)}
   )
   
-  output$download.sankey.plot <- renderUI({
+  output$download.sankey.plot.svg <- renderUI({
     req(sankey.df())
-    downloadButton('out.download.sankey.plot', 'Download Sanky plot')
+    downloadButton('out.download.sankey.plot.svg', 'Download Sanky plot as svg')
+  })
+  output$download.sankey.plot.pdf <- renderUI({
+    req(sankey.df())
+    downloadButton('out.download.sankey.plot.pdf', 'Download Sanky plot as pdf')
   })
   
-  output$out.download.sankey.plot <- downloadHandler(
+  output$out.download.sankey.plot.svg <- downloadHandler(
+    filename = function(){'sankey_plot.svg'},
+    content = function(file){ggsave(file, sankey.plot(), device = 'svg')
+    }
+  )
+  output$out.download.sankey.plot.pdf <- downloadHandler(
     filename = function(){'sankey_plot.pdf'},
     content = function(file){ggsave(file, sankey.plot(), device = 'pdf')
     }
@@ -565,23 +711,31 @@ server <- function(input, output, session){
   })
   
   output$out.download.bar.data <- downloadHandler(
-    filename = function() {'barplot_plot_data.csv'},
-    content = function(file){write.csv(bar.df(), file, row.names = F)}
+    filename = function() {'barplot_plot_data.tsv'},
+    content = function(file){write.table(bar.df(), file, row.names = F)}
   )
   
-  output$download.bar.plot <- renderUI({
+  output$download.bar.plot.svg <- renderUI({
     req(bar.df())
-    downloadButton('out.download.bar.plot', 'Download barplot plot')
+    downloadButton('out.download.bar.plot.svg', 'Download barplot plot as svg')
+  })
+  output$download.bar.plot.pdf <- renderUI({
+    req(bar.df())
+    downloadButton('out.download.bar.plot.pdf', 'Download barplot plot as pdf')
   })
   
-   output$out.download.bar.plot <- downloadHandler(
+  output$out.download.bar.plot.svg <- downloadHandler(
+    filename = function(){'barplot_plot.svg'},
+    content = function(file){ggsave(file, bar.plot(), device = c('svg'))}
+  )
+  output$out.download.bar.plot.pdf <- downloadHandler(
     filename = function(){'barplot_plot.pdf'},
-    content = function(file){ggsave(file, bar.plot(), device = 'pdf')}
+    content = function(file){ggsave(file, bar.plot(), device = c('pdf'))}
   )
   
   #link to paper
   url <- a('empty',
-           href = 'https://www.https://github.com/RZlab')
+           href = 'github.com/RZlab')
   output$citation <- renderUI({
     tagList('Please cite:', url)
   })

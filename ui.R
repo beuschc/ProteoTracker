@@ -9,9 +9,13 @@ library(Cairo)
 library(broom)
 library(gridExtra)
 library(cowplot)
-options(shiny.usecairo = T)
+library(metap)
+library(svglite)
 
-cell.lines <- c('' ,'hFF', 'RKO', 'iPSC', 'EB', 'ESC')
+options(shiny.usecairo = T)
+options(dplyr.summarise.inform = F)
+
+cell.lines <- NULL
 
 ui <- dashboardPage(
   dashboardHeader(
@@ -22,20 +26,31 @@ ui <- dashboardPage(
   dashboardSidebar(
     width = 350,
     
-    selectInput("in.t1.denominator", "Please specify the denominator for T1", cell.lines, multiple = F),
-    selectInput("in.t1.numerator", "Please specify the numerator for T1", cell.lines, multiple = F),
+    #h3('Upload own data'),
+    radioButtons('checkGroup', 
+                       h4('Please specify the data'),
+                       choices  = list('Use ProteTracker data' = 1,
+                                       'Upload own data' = 2),
+                       selected = character(0)),
     
-    selectInput("in.t2.denominator", "Please specify the denominator for T2", cell.lines, multiple = F),
-    selectInput("in.t2.numerator", "Please specify the numerator for T2", cell.lines, multiple = F),
+    conditionalPanel(condition = 'input.checkGroup == 2',
+                     fileInput('upload.file', 'Please choose tsv file',
+                               accept = c('text/tsv', '.tsv'))),
     
-    selectInput("in.t3.denominator", "Please specify the denominator for T3", cell.lines, multiple = F),
-    selectInput("in.t3.numerator", "Please specify the numerator for T3", cell.lines, multiple = F),
+    selectInput('in.t1.denominator', 'Please specify the denominator for T1', cell.lines, multiple = F),
+    selectInput('in.t1.numerator', 'Please specify the numerator for T1', cell.lines, multiple = F),
+    
+    selectInput('in.t2.denominator', 'Please specify the denominator for T2', cell.lines, multiple = F),
+    selectInput('in.t2.numerator', 'Please specify the numerator for T2', cell.lines, multiple = F),
+    
+    selectInput('in.t3.denominator', 'Please specify the denominator for T3', cell.lines, multiple = F),
+    selectInput('in.t3.numerator', 'Please specify the numerator for T3', cell.lines, multiple = F),
     
     sliderInput("fisher.cutoff", "Specify cutoff for fisher significance", min = 0, max = 1, value = 0.05, step = 0.01),
     
     uiOutput('filterGenes'),
-
-    actionButton('start.analysis', 'Start Analysis'),
+    
+    uiOutput('action'),
 
     p(strong(uiOutput('citation')))
   ),
@@ -93,41 +108,44 @@ ui <- dashboardPage(
     
     #result section      
     tabsetPanel(type = "tabs",
-               tabPanel('Trajectory analysis',
-                        h1(""),
-                        
-                        plotOutput('scatter.plot') %>% withSpinner(),
-                        
-                        h1(""),
-                        
-                        uiOutput('download.scatter.data'),
-                        uiOutput('download.scatter.plot'),
-                        
-                        h1(""),
-                        h1(""),
-                        h1(""),
-                        
-                        plotOutput('sankey.plot') %>% withSpinner(),
-                        
-                        h1(""),
-                        
-                        uiOutput('download.sankey.data'),
-                        uiOutput('download.sankey.plot'),
-                        
-                        h1(""),
-                        h1(""),
-                        h1(""),
-                        
-                        plotOutput('bar.plot') %>% withSpinner(),
-                        
-                        h1(""),
-                        
-                        uiOutput('download.bar.data'),
-                        uiOutput('download.bar.plot')),
-                        
+                tabPanel('Trajectory analysis',
+                         h1(""),
+                         
+                         plotOutput('scatter.plot') %>% withSpinner(),
+                         
+                         h1(""),
+                         
+                         uiOutput('download.scatter.data'),
+                         uiOutput('download.scatter.plot.pdf'),
+                         uiOutput('download.scatter.plot.svg'),
+                         
+                         h1(""),
+                         h1(""),
+                         h1(""),
+                         
+                         plotOutput('sankey.plot') %>% withSpinner(),
+                         
+                         h1(""),
+                         
+                         uiOutput('download.sankey.data'),
+                         uiOutput('download.sankey.plot.pdf'),
+                         uiOutput('download.sankey.plot.svg'),
+                         
+                         h1(""),
+                         h1(""),
+                         h1(""),
+                         
+                         plotOutput('bar.plot') %>% withSpinner(),
+                         
+                         h1(""),
+                         
+                         uiOutput('download.bar.data'),
+                         uiOutput('download.bar.plot.pdf'),
+                         uiOutput('download.bar.plot.svg')),
+                
                 tabPanel('Sanky data',
-                        dataTableOutput("protein.trajectory") %>% withSpinner()))
-    
-
+                         DT::dataTableOutput("protein.trajectory") %>% withSpinner()),
+                tabPanel('Instructions',
+                         img(src = 'ProteoTracker_instructions.jpg', height = 1500, align = 'middle')))
   )
 )
