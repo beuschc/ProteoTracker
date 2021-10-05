@@ -18,6 +18,7 @@ options(dplyr.summarise.inform = F)
 cell.lines <- NULL
 
 ui <- dashboardPage(
+    title = 'ProteoTracker',
   dashboardHeader(
     title = img(src = 'ProteoTracker.jpg', height = 100, align = 'left'),
     titleWidth = 350
@@ -46,7 +47,7 @@ ui <- dashboardPage(
     selectInput('in.t3.denominator', 'Please specify the denominator for T3', cell.lines, multiple = F),
     selectInput('in.t3.numerator', 'Please specify the numerator for T3', cell.lines, multiple = F),
     
-    sliderInput("fisher.cutoff", "Specify cutoff for fisher significance", min = 0, max = 1, value = 0.05, step = 0.01),
+    sliderInput("fisher.cutoff", "Specify cutoff for fisher significance", min = 0.001, max = 0.5, value = 0.05, step = 0.001),
     
     uiOutput('filterGenes'),
     
