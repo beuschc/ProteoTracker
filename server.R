@@ -734,7 +734,7 @@ server <- function(input, output, session){
   )
   
   #link to paper
-  url <- a('empty',
+  url <- a('Sabatier, P., Beusch, C.M., Saei, A.A. et al. An integrative proteomics method identifies a regulator of translation during stem cell maintenance and differentiation. Nat Commun 12, 6558 (2021). https://doi.org/10.1038/s41467-021-26879-4',
            href = 'https://www.nature.com/articles/s41467-021-26879-4')
   output$citation <- renderUI({
     tagList('Please cite:', url)
