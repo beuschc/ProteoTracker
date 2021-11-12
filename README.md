@@ -45,9 +45,7 @@ Once all packages are installed, please start the ProteoTracker R shiny with the
 # Description
 Detailed characterization of cell type transitions is essential for cell biology in general and particularly for the development of stem cell-based therapies in regenerative medicine. To systematically study such transitions, we introduce a method that simultaneously measures protein expression and thermal stability changes in cells and provide a web-based visualization tool ProteoTracker. We apply our method to study the differences between human pluripotent stem cells (PSC) and several cell types including their parental cell line and differentiated progeny. We detect alterations of protein properties in numerous cellular pathways and components including ribosome biogenesis and demonstrate that modulation of ribosome maturation through SBDS protein can be helpful for manipulating cell stemness in vitro. Using our integrative proteomics approach and the web-based tool, we uncover a molecular basis for the uncoupling of robust transcription from parsimonious translation in stem cells and propose a method for maintaining pluripotency in vitro.
 
-For more information, please refer to the paper: <xx>
-
-<img src='www/workflow.jpg' width='100%' />
+For more information, please refer to the paper: <https://www.nature.com/articles/s41467-021-26879-4>
 
 # License
 
