@@ -735,7 +735,7 @@ server <- function(input, output, session){
   
   #link to paper
   url <- a('empty',
-           href = 'github.com/RZlab')
+           href = 'https://www.nature.com/articles/s41467-021-26879-4')
   output$citation <- renderUI({
     tagList('Please cite:', url)
   })
